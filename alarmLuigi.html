@@ -1,0 +1,375 @@
+<html>
+<head>
+
+	<title>Luigi's Alarm System</title>
+	
+	<audio tabindex="0" id="siren" preload="auto" >
+    	<source src="siren.mp3">
+	</audio>
+	
+	<style>
+		html{
+			font-family: Helvetica;
+			background-color: white;
+		}
+		
+		h1, h2{
+			font-family: Helvetica;
+			text-align: center;
+			color: gray;
+		}
+		
+		#videoContainer{
+			 width: 660px;
+    		float: left;
+			margin-right: 20px;
+		}
+		
+		#controlsContainer{
+			text-align: center;
+		}
+		
+		.card{
+			background-color: white;
+			box-shadow: 0px 0px 10px 0px lightgray;
+		}
+		
+		#log{
+			min-width: 500px;
+			text-align: left;
+			min-height: 300px;
+			border: none;
+		}
+		
+		#logContainer{
+			height: 500px;
+		}
+		
+		#lastAvgColor{
+			color:white;
+		}
+	
+		
+	</style>
+</head>
+<body>
+
+<h1>Luigi's Alarm System</h1>
+
+<section id="videoContainer" class="card">
+	<video id="video" width="640" height="480" autoplay></video>
+</section>
+<section id="controlsContainer" class="card">
+	<button id="snap" class="sexyButton" onclick="toggleRemoteLog()">Remote Logging Disabled</button>
+	<button id="internetConnection">Internet Connection</button>
+	<button id="lastPhoto">Last Photo Analyzed</button>
+	<button id="lastAvgColor">AVG Color</button>
+	<br/>
+	Uptime:
+	<span id=uptimeLabel>0s</span>
+	Downtime:
+	<span id=downtime>0s</span>
+	Panictime:
+	<span id=panictime>0s</span>
+</section>
+<section id="logContainer" class="card">
+	<form target="_blank" action="http://aphotoaday.altervista.org/alarm/main.php" id="formSubmitMail" method="POST">
+			<input type="text" name="time" id="time" value="Start"></input>
+			<input type="text" name="status" id="status" value="Start"></input>
+			<input type="text" name="critical" id="critical" value="0"></input>
+			<input type="text" name="uptime" id="uptime" value="0"/>
+			<input type="text" name="imageData" id="imageData"/>
+	</form>
+	<form target="_blank" action="http://aphotoaday.altervista.org/main.php" id="formSubmitMail2" method="POST" enctype="text/plain">			
+		<textarea id="log" name="log">
+			Starting the log
+		</textarea>
+	</form>
+	<form target="_blank" action="http://aphotoaday.altervista.org/alarm/saveImg.php" id="formSaveImg" method="POST">
+		<input type="text" name="imageDataOLD" id="imageDataOLD"/>
+	</form>
+</section>
+<section id="photoContanier" class="card">
+	<h2>Last Snapshot</h2>
+	<canvas id="canvas" width="640" height="480"></canvas>
+</section>
+	<script type="text/javascript" src="online.min.js"></script>
+	<script>
+		var panic = false;
+		var firstStart;
+		var upTime = 0;
+		var firstNoInternet;
+		var downTime = 0;
+		var firstAlarm;
+		var panicTime = 0;
+		var remoteLoggingEnabled = false;
+		
+		//document.domain = "aphotoday.altervista.com";
+		
+		//The following lines unable the user to close the window
+   /* window.onbeforeunload = confirmExit;
+    function confirmExit() {
+        return "You have attempted to leave this page. Are you sure?";
+    }*/
+		
+		
+		function toggleRemoteLog(){
+			//var password = window.prompt("Please insert password","");
+			//if (password!="homeProtection") return;
+			if (remoteLoggingEnabled){
+				remoteLoggingEnabled = false;
+				document.getElementById("snap").style.backgroundColor = "red";
+				document.getElementById("snap").textContent = "Remote Logging Disabled";
+			}else{
+				remoteLoggingEnabled = true;
+				document.getElementById("snap").style.backgroundColor = "green";
+				document.getElementById("snap").textContent = "Remote Logging Enabled";
+				document.getElementById("snap").disabled = true;
+			}
+
+		}
+
+		//document.getElementById("snap").addEventListener("click", enableRemoteLog());
+		
+		function doesConnectionExist() {
+		    var xhr = new XMLHttpRequest();
+		    var file = "http://aphotoaday.altervista.org/index.html";
+		    var randomNum = Math.round(Math.random() * 10000);
+		     
+		    xhr.open('HEAD', file + "?rand=" + randomNum, false);
+		     
+		    try {
+		        xhr.send();
+		         
+		        if (xhr.status >= 200 && xhr.status < 304) {
+		            return true;
+		        } else {
+		            return false;
+		        }
+		    } catch (e) {
+		        return false;
+		    }
+		}
+		
+		//To send an email
+		function updateRemoteLog(){
+			document.getElementById("formSubmitMail").submit();
+		}
+		
+		
+		// Put event listeners into place
+		window.addEventListener("DOMContentLoaded", function() {
+			// Grab elements, create settings, etc.
+			var canvas = document.getElementById("canvas"),
+				context = canvas.getContext("2d"),
+				video = document.getElementById("video"),
+				videoObj = { "video": true },
+				errBack = function(error) {
+					console.log("Video capture error: ", error.code); 
+				};
+
+			// Put video listeners into place
+			if(navigator.getUserMedia) { // Standard
+				navigator.getUserMedia(videoObj, function(stream) {
+					video.src = stream;
+					video.play();
+				}, errBack);
+			} else if(navigator.webkitGetUserMedia) { // WebKit-prefixed
+				navigator.webkitGetUserMedia(videoObj, function(stream){
+					video.src = window.webkitURL.createObjectURL(stream);
+					video.play();
+				}, errBack);
+			} else if(navigator.mozGetUserMedia) { // WebKit-prefixed
+				navigator.mozGetUserMedia(videoObj, function(stream){
+					video.src = window.URL.createObjectURL(stream);
+					video.play();
+				}, errBack);
+			}
+
+			
+			
+			//END OF INIZIALIZATIONS: LET'S START TO MAKE SOMETHING CUSTOM
+			
+			//Let's start to do the log
+			
+			var log = document.getElementById('log');
+			var statusText = document.getElementById('status');
+			var timeText = document.getElementById('time');
+			var criticalText = document.getElementById('critical')
+
+			function addZero(i) {
+			    if (i < 10) {
+			        i = "0" + i;
+			    }
+			    return i;
+			}
+
+		    var d = new Date();
+		    var x = document.getElementById("demo");
+		    var h = addZero(d.getHours());
+		    var m = addZero(d.getMinutes());
+		    var s = addZero(d.getSeconds());
+			var day=d.getDate();
+			var month = d.getMonth()+1;
+			var year = d.getFullYear();
+			
+			//Let's update the remote log
+			timeText.value=day +'/'+ month +'/'+ year + '|' + h + ':' + m + ':' + s;
+			statusText.value="System Start";
+			criticalText.value=0;
+			updateRemoteLog();
+			log.textContent = timeText.value+ ">> "+statusText.value;
+			startTime = d.getTime();
+			//Update local log
+			
+			
+			//And now let's do the periodical things
+			
+			
+			setInterval(function(){
+			
+				//Log Update
+				var d = new Date();
+			    var x = document.getElementById("demo");
+			    var h = addZero(d.getHours());
+			    var m = addZero(d.getMinutes());
+			    var s = addZero(d.getSeconds());
+		    	var day=d.getDate();
+				var month = d.getMonth()+1;
+				var year = d.getFullYear();
+				
+				//I check if I'm online
+				var downtimeText = document.getElementById("downtime");
+				var uptimeText = document.getElementById("uptime");
+				var updtimeLabelText = document.getElementById("uptimeLabel");
+				var buttonOnline=document.getElementById('internetConnection');
+				 if(window.onLine){
+				  buttonOnline.textContent = "Connected to Internet";
+				  buttonOnline.style.backgroundColor = "lightgreen";
+				  upTime += 1;
+				  uptimeText.value = upTime + "s ";
+				  uptimeLabel.textContent = upTime + "s ";
+				 }else{
+				  buttonOnline.textContent = "NOT Connected to Internet";
+				  buttonOnline.style.backgroundColor = "red";
+				  downTime += 1;
+				  downtimeText.textContent = downTime + "s ";
+				 }
+				
+				
+				//Analysis of the photo
+				
+		    var blockSize = 5, // only visit every 5 pixels
+		        defaultRGB = {r:0,g:0,b:0}, // for non-supporting envs
+		        data, width, height,
+		        i = -4,
+		        length,
+		        rgb = {r:0,g:0,b:0},
+		        count = 0;
+		
+		    
+		    height = canvas.height;
+		    width = canvas.width;
+		    
+		    context.drawImage(video, 0, 0, 640, 480);
+		    
+		    try {
+		        data = context.getImageData(0, 0, width, height);
+		    } catch(e) {
+		        /* security error, img on diff domain */alert('x');
+		        return defaultRGB;
+		    }
+		    
+		    length = data.data.length;
+		    
+		    while ( (i += blockSize * 4) < length ) {
+		        ++count;
+		        rgb.r += data.data[i];
+		        rgb.g += data.data[i+1];
+		        rgb.b += data.data[i+2];
+		    }
+		    
+		    // ~~ used to floor values
+		    rgb.r = ~~(rgb.r/count);
+		    rgb.g = ~~(rgb.g/count);
+		    rgb.b = ~~(rgb.b/count);
+		    
+			//document.body.style.backgroundColor = 'rgb('+rgb.r+','+rgb.b+','+rgb.g+')'; 
+			var colorIndicator = document.getElementById("lastAvgColor");
+			colorIndicator.style.backgroundColor = 'rgb('+rgb.r+','+rgb.b+','+rgb.g+')';
+			var avgColor = (rgb.r+rgb.b+rgb.g)/3;
+			colorIndicator.textContent=parseInt(avgColor);
+			
+			//Let's see if we are in dangerous mode
+			var lastPhotoStatus = document.getElementById("lastPhoto");
+			//var uptimeText = document.getElementById("uptime");
+			//var downtimeText = document.getElementById("downtime");
+			var panictimeText = document.getElementById("panictime");
+			var siren = document.getElementById("siren");
+			if(avgColor>18){
+				//LIGHTS ON: WE ARE IN PANIC
+				panic = true;
+				timeText.value= day +'/'+ month +'/'+ year + '|' + h + ':' + m + ':' + s;
+				statusText.value="Lights reveleated\n";
+				criticalText.value=1;
+				if (remoteLoggingEnabled) updateRemoteLog();
+				log.textContent = timeText.value+ ">> "+statusText.value + "\n" + log.textContent;
+				lastPhotoStatus.style.backgroundColor = "red";
+				lastPhotoStatus.textContent = "LIGHTS ON!";
+				panicTime += 1;
+				panictimeText.textContent = panicTime + "s ";
+				//START THE SIREN!
+				siren.play();
+				//SAVE THE IMAGES
+				//var dataURL = canvas.toDataURL();
+				document.getElementById('imageData').value = canvas.toDataURL('image/png');
+				//document.getElementById('formSaveImg').submit();
+				
+			}else{
+				if (panic){
+				
+					timeText.value= day +'/'+ month +'/'+ year + '|' + h + ':' + m + ':' + s;
+					statusText.value="No lights, but we are still in panic\n";
+					criticalText.value=1;
+					if(remoteLoggingEnabled) updateRemoteLog();
+					log.textContent = timeText.value+ ">> "+statusText.value + "\n" + log.textContent;
+					
+				 	//log.textContent = + d.getDay() +"/"+ d.getMonth() +"/"+ d.getFullYear() + "|" + h + ":" + m + ":" + s + ">> No lights, but we are still in panic\n" + log.textContent;				
+					panicTime += 1;
+					panictimeText.textContent = panicTime + "s ";
+					/*upTime += 1;
+					uptimeText.textContent = upTime + "s ";*/
+				}
+				else{
+				
+					timeText.value= day +'/'+ month +'/'+ year + '|' + h + ':' + m + ':' + s;
+					statusText.value="No lights, everything seems to be fine\n";
+					criticalText.value=0;
+					if (remoteLoggingEnabled) updateRemoteLog();
+					log.textContent = timeText.value+ ">> "+statusText.value + "\n"+ log.textContent;
+				// 	log.textContent = + d.getDay() +"/"+ d.getMonth() +"/"+ d.getFullYear() + "|" + h + ":" + m + ":" + s + ">> No lights, everything seems to be fine\n" + log.textContent;				
+				 	/*upTime += 1;
+					uptimeText.textContent = upTime + "s ";*/
+				}
+				
+				document.getElementById('imageData').value = "0";
+				lastPhotoStatus.style.backgroundColor = "lightgreen";
+				lastPhotoStatus.textContent = "lights off";
+			}
+			
+			
+			//If we are in panic mode, I have to send an email to my smartphone
+			
+			
+			
+			}, 1000);
+			
+			
+			
+		}, false);
+		
+	</script>
+
+
+</body>
+</html>

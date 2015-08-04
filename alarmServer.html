@@ -1,0 +1,143 @@
+<html>
+<head>
+	<title>Alarm Luigi Server</title>
+	<style>
+		html{
+			font-family: Helvetica;
+			background-color: white;
+		}
+		
+		h1, h2{
+			font-family: Helvetica;
+			text-align: center;
+			color: gray;
+		}
+		
+		#videoContainer{
+			 width: 660px;
+    		float: left;
+			margin-right: 20px;
+		}
+		
+		#controlsContainer{
+			text-align: center;
+		}
+		
+		.card{
+			background-color: white;
+			box-shadow: 0px 0px 10px 0px lightgray;
+		}
+		
+		#log{
+			min-width: 500px;
+			text-align: left;
+			min-height: 300px;
+			border: none;
+		}
+		
+		#logContainer{
+			height: 500px;
+		}
+		
+		#lastAvgColor{
+			color:white;
+		}
+		#status{
+			text-align:center;
+		}
+		span{
+			text-weight: bold;
+		}
+		
+	</style>
+
+</head>
+<body>
+	<h1>Luigi's Alarm System - Server</h1>
+	<div id="status">
+		<h1 id="dangerText" style="color:gray;">I don't know the situation</h1>
+		Last update received at:
+		<span id="lastUpdateTime"> No data </span>
+		with message: 
+		<span id="lastUpdateMessage"> No data </span>	
+		<br/>
+		<button id="mailAlert" action="toggleEmail" style="background-color: green;">Email notifications enabled</button>
+	</div>
+	<form id="mailInactivityForm" action="http://aphotoaday.altervista.org/alarm/inactivity.php"></form>
+	<form id="mailAlarmForm" action="http://aphotoaday.altervista.org/alarm/alarm.php"></form>
+	<img id="lastImg"/>
+	<textArea id="log">Starting</textArea>
+
+	<script>
+		var canSendEmail = false;
+		var danger = false;
+		var lastTime = "";
+		var lastMessage = "";
+		var dangerText = document.getElementById("dangerText");
+		var lastUpdateTimeText = document.getElementById("lastUpdateTime");
+		var lastUpdateMessageText = document.getElementById("lastUpdateMessage");
+		var logText = document.getElementById("log");
+		var timeOut = 0;
+		var emailEnabled = true;
+		var counter = 0; 
+		
+		var lastLogLine = "";
+		var tempString = ""
+		
+		function readTextFile(file)
+		{
+		    var rawFile = new XMLHttpRequest();
+		    rawFile.open("GET", file, false);
+		    rawFile.onreadystatechange = function ()
+		    {
+		        if(rawFile.readyState === 4)
+		        {
+		            if(rawFile.status === 200 || rawFile.status == 0)
+		            {
+		                var text = rawFile.responseText;
+						tempString=text;
+		            }
+		        }
+		    }
+		    rawFile.send(null);
+		}
+
+		
+		setInterval(function(){
+			counter++;
+			if (((counter==0)||(counter%5==0))&&(emailEnabled)) canSendEmail=true;
+			else canSendEmail = false;
+			
+			readTextFile("file://C:/Users/Luigi/Desktop/Alarm/lastLine.txt");
+			if (!lastLogLine.localeCompare(tempString)) timeOut++;
+			else timeOut=0;
+			lastLogLine=tempString;
+			logText.textContent = lastLogLine + "\n" + logText.textContent;
+			var splitted = lastLogLine.split(">> ");
+			lastUpdateTimeText.textContent=splitted[0];
+			lastUpdateMessageText.textContent=splitted[1];
+			var panic = parseInt(splitted[2]);
+			if(!panic){
+				dangerText.textContent = "No problem";
+				dangerText.style.color = "green";
+			}else{
+				//We are in panic... do something!
+				//if (canSendEmail) document.getElementById("mailAlarmForm").submit;
+				dangerText.textContent = "PANIC";
+				dangerText.style.color = "red";
+			}
+			if (timeOut>=5){
+		 	//It's five seconds that we have the very same last log line... do something!
+			 if (canSendEmail) document.getElementById("mailInactivityForm").submit;
+			 if (!panic) dangerText.textContent = "No connection from "+timeOut+" seconds!";
+			 else dangerText.textContent = "PANIC! And No connection from "+timeOut+" seconds.";
+			 dangerText.style.color = "red";
+			}
+		
+		},1000);
+		
+	
+	</script>
+
+</body>
+</html>
